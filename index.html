@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> المتحف الأسلامي | Digital Museum</title>
+    <style>
+        :root {
+            --primary-color: #8B5A2B;
+            --bg-color: #f4f1ea;
+            --text-color: #333;
+            --card-bg: #fff;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        body.dark-mode {
+            --bg-color: #1a1a1a;
+            --text-color: #f4f1ea;
+            --card-bg: #2a2a2a;
+            --primary-color: #d4a373;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto 30px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--primary-color);
+        }
+        h1 { margin: 0; color: var(--primary-color); font-size: 1.8rem; }
+        .controls button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-left: 10px;
+            transition: 0.3s;
+        }
+        .controls button:hover { opacity: 0.8; }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .artifact-card {
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+        .artifact-card:hover { transform: translateY(-5px); box-shadow: 0 8px 16px rgba(0,0,0,0.2); }
+        .artifact-card img { width: 100%; height: 250px; object-fit: cover; display: block; }
+        .artifact-info { padding: 15px; text-align: center; }
+        .artifact-info h3 { margin: 0 0 10px 0; color: var(--primary-color); font-size: 1.2rem; }
+        .artifact-info p { margin: 0; font-size: 0.9rem; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        /* النافذة المنبثقة */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .modal-content {
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            max-width: 800px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        .modal-content img { width: 100%; max-height: 400px; object-fit: contain; background-color: #000; }
+        .modal-details { padding: 20px; }
+        .modal-details h2 { color: var(--primary-color); margin-top: 0; }
+        
+        /* تنسيق الوصف ليدعم الأسطر المتعددة */
+        .modal-details p { 
+            line-height: 1.6; 
+            font-size: 1.1rem; 
+            white-space: pre-line; 
+        }
+        
+        /* تنسيقات الوسائط (فيديو وصوت) */
+        .media-section { margin-bottom: 20px; display: none; }
+        .media-section h3 { color: var(--primary-color); margin-bottom: 10px; font-size: 1.1rem; }
+        .media-section video { width: 100%; border-radius: 8px; background-color: #000; }
+        .media-section audio { width: 100%; margin-top: 10px; }
+        .audio-section { margin-top: 20px; padding-top: 15px; border-top: 1px dashed #ccc; }
+
+        .close-btn {
+            position: absolute; top: 10px; left: 15px;
+            background: rgba(255,255,255,0.8); border: none;
+            font-size: 24px; cursor: pointer; border-radius: 50%;
+            width: 35px; height: 35px; display: flex;
+            justify-content: center; align-items: center; color: #333;
+            z-index: 10;
+        }
+        body.dark-mode .close-btn { background: rgba(0,0,0,0.8); color: white; }
+        html[dir="ltr"] .close-btn { left: auto; right: 15px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1 id="main-title">المتحف الرقمي</h1>
+        <div class="controls">
+            <button onclick="toggleLanguage()" id="lang-btn">English</button>
+            <button onclick="toggleDarkMode()">🌙</button>
+        </div>
+    </header>
+
+    <div class="gallery" id="gallery-container"></div>
+
+    <!-- النافذة المنبثقة -->
+    <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+            <img id="modal-img" src="" alt="" style="display: none;">
+            
+            <div class="modal-details">
+                <!-- قسم الفيديو -->
+                <div id="video-section" class="media-section">
+                    <h3 id="video-title">🎬 حكاية القطعة</h3>
+                    <video id="modal-video" controls></video>
+                </div>
+
+                <!-- قسم الصوت -->
+                <div id="audio-section" class="media-section audio-section">
+                    <h3 id="audio-title">🎧 همس التاريخ</h3>
+                    <audio id="modal-audio" controls></audio>
+                </div>
+
+                <h2 id="modal-title"></h2>
+                <p id="modal-desc"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. بيانات القطع الأثرية (عدلي المسارات هنا)
+        // ==========================================
+        // قواعد مهمة:
+        // - لو القطعة ملهاش صورة، سيبي image: ""
+        // - لو القطعة ملهاش فيديو، سيبي video: ""
+        // - لو القطعة ملهاش صوت، سيبي audio: ""
+        // - استخدمي \n لعمل سطر جديد داخل الوصف (desc)
+        // - لا تنسي الفاصلة (,) بين كل قطعة والتي تليها
+
+        const artifactsData = [
+            // مثال 1: قطعة فيها كل حاجة (صورة + فيديو + صوت)
+            {
+                id: 1,
+                image: "image1.jpg",
+                video: "",
+                audio: "",
+                titleAr: "رنك",
+                titleEn: "Blazon (Rank) ",
+                descAr: "رنك باسم السلطان الاشرف قايتباي
+العصر المملوكي ٦٤٨ هجريه _ ١٢٥٠ ميلاديه
+٧/٦ هجري ___ ١٣/١٢ ميلادي",
+                descEn: "Blazon (Rank) in the name of Sultan Al-Ashraf Qaitbay
+Mamluk Era 648 AH _ 1250 AD
+6th / 7th Century AH ___ 12th / 13th Century"
+            },
+            // مثال 2: قطعة فيها صورة بس
+            {
+                id: 2,
+                image: "image2.jpg",
+                video: "",
+                audio: "",
+                titleAr: "",
+                titleEn: "",
+                descAr: "",
+                descEn: ""
+            },
+            // مثال 3: قطعة فيها فيديو بس (مفيش صورة)
+            {
+                id: 3,
+                image: "image3.jpg",
+                video: "",
+                audio: "",
+                titleAr: "حشوه من الخشب",
+                titleEn: "A wooden panel",
+                descAr: "حشوه من الخشب طراز سامراء ترجع الي العصر الطولوني ٢٥٤ هجريه/٨٦٨ ميلاديه   ٣/٢ هجري ___ ٧/٦ ميلادي",
+                descEn: "A wooden panel in the Samarra style dating back to the Tulunid Era 254 AH / 868 AD
+2nd / 3rd Century AH ___ 6th / 7th Century AD"
+               
+            },
+            // مثال 4: قطعة فيها صوت بس (مفيش صورة أو فيديو)
+            {
+                id: 4,
+                image: "image4.jpg",
+                video: "",
+                audio: "",
+                titleAr: "حشوه مربعه",
+                titleEn: "Square hollowed-",
+                descAr: "حشوه مربعه من الجص المفرغ
+مصر العصر العثماني ٦٩٩ هجريه
+/١٢٩٩ ميلاديه
+١٢/١١ هجري ___ ١٨/١٧ ميلادي
+",
+                descEn: "Square hollowed-out plaster panel
+Egypt, Ottoman Period, 699 AH / 1299 AD
+11/12th Century AH ___ 17/18th Century AD"
+            }
+            // ... (كملي باقي القطع بنفس الطريقة حتى آخر قطعة عندك)
+        ];     {
+                id: 5,
+                image: "image5.jpg",
+                video: "",
+                audio: "",
+                titleAr: "رنك",
+                titleEn: "Blazon (Rank)",
+                descAr: "رنك باسم السلطان الاشرف قايتباي
+العصر المملوكي ٦٤٨ هجريه _ ١٢٥٠ ميلاديه
+٧/٦ هجري ___ ١٣/١٢ ميلادي",
+                descEn: "Blazon (Rank) in the name of Sultan Al-Ashraf Qaitbay
+Mamluk Era 648 AH _ 1250 AD
+6th / 7th Century AH ___ 12th / 13th Century"
+            },   {
+                id: 6,
+                image: "image6.jpg",
+                video: "",
+                audio: "",
+                titleAr: "لوح مستطيل من الجص المعشق بالزجاج الملون عليه زخارف تمثل شجر السرو ، وتستعمل ",
+                titleEn: "A rectangular plaster panel",
+                descAr: "لوح مستطيل من الجص المعشق بالزجاج الملون عليه زخارف تمثل شجر السرو ، وتستعمل مثل هذه الألواح لسد فتحة النافذة ولعل الغرض منها تخفيف حدة الضوء ، وقد انتشر هذا النوع من الزجاج المعشق في العصر المملوكي والعثماني
+مصر / القرن 8-12 هـ / 14-18 م
+",
+                descEn: "A rectangular plaster panel inset with stained glass featuring cypress tree motifs. Such panels were used to cover window openings, likely serving to soften the intensity of light. This style of stained glass became widespread during the Mamluk and Ottoman periods.
+Egypt / 8th–12th Century AH / 14th–18th Century AD"
+            },
+ {
+                id: 7,
+                image: "image7.jpg",
+                video: "",
+                audio: "",
+                titleAr: "لوح مستطيل من الجص المعشق بالزجاج الملون",
+                titleEn: "A rectangular plaster panel",
+                descAr: "",
+                descEn: ""
+            },   {
+                id: 8,
+                image: "image8.jpg",
+                video: "",
+                audio: "",
+                titleAr: "",
+                titleEn: "",
+                descAr: "",
+                descEn: ""
+            },  {
+                id: 9,
+                image: "image9.jpg",
+                video: "",
+                audio: "",
+                titleAr: "لوح من الرخام ",
+                titleEn: "A marble panel",
+                descAr: "لوح من الرخام مزخرف بالطبق النجمي
+العصر العثماني ٦٩٩ _ ١٢٩٩
+٦ / ٧ هجري ___ ١١ / ١٢ ميلادي",
+                descEn: "A marble panel decorated with a star-patterned dish design
+Ottoman Era 699 AH _ 1299 AD
+6th / 7th Century AH ___ 11th / 12th Century"
+            }, {
+                id:10 ,
+                image: "image10.jpg",
+                video: "",
+                audio: "",
+                titleAr: "",
+                titleEn: "",
+                descAr: "",
+                descEn: ""
+            }, {
+                id:11 ,
+                image: "image11.jpg",
+                video: "",
+                audio: "",
+                titleAr: "لوح من الرخام المزخرف",
+                titleEn: "Relief-carved",
+                descAr: "لوح من الرخام المزخرف بالحفر البارز   العصر العثماني ٦٩٩ هجرية   ١٢٩٩ ميلادي    ٧/٤ هجري / ١٦/١٧ ميلادي",
+                descEn: "Relief-carved decorated marble panel
+   
+Ottoman Era, 699 AH
+   
+1299 AD
+   
+7/4 Hijri / 16/17 AD"
+            },  {
+                id:12 ,
+                image: "image12.jpg",
+                video: "",
+                audio: "",
+                titleAr: "",
+                titleEn: "",
+                descAr: "",
+                descEn: ""
+            },  {
+                id:13 ,
+                image: "image13.jpg",
+                video: "",
+                audio: "",
+                titleAr: "طبق من الخزف ذو البريق المعدني
+",
+                titleEn: "A lusterware ceramic dish",
+                descAr: "طبق من الخزف ذو البريق المعدني
+مصر في العصر الفاطمي
+٩٠٩ هجريه/١١٦٠ ميلاديه
+٣/ ٤ هجري ___ ٩/ ١٠ ميلادي",
+                descEn: "A lusterware ceramic dish
+Egypt in the Fatimid Period
+909 AH / 1160 AD
+3rd / 4th Century AH ___ 9"
+            }, {
+                id:14,
+                image: "image14.jpg",
+                video: "",
+                audio: "",
+                titleAr: "قطعه من نسيج الحرير",
+                titleEn: "A piece of fine silk Period   3rd / 4th Century AH ____ 10th / 11th Century",
+                descAr: "قطعه من نسيج الحرير الرقيق
+مطرزه بشريط كتابي
+مصر العصر الفاطمي
+3 / 4 هجري ____ 10 / 11 ميلادي
+",
+                descEn: "A piece of fine silk fabric   Embroidered with an inscriptional band (Tiraz)   Egypt, Fatimid Period   3rd / 4th Century AH ____ 10th / 11th Century  Embroidered with an inscriptional band (Tiraz)   Egypt, Fatimid Period   3rd / 4th Century AH ____ 10th / 11th Century"
+            },   {
+                id:15 ,
+                image: "image15.jpg",
+                video: "",
+                audio: "",
+                titleAr: "قارورة من الزجاج",
+                titleEn: "A glass bottle ",
+                descAr: "قارورة من الزجاج داخلها بيت شمعة للانارة   مصر في العصر الأموي ٤١ هجريه / ٦٦١ ميلاديه   ٢/١ هجري ___ ٦/٥ ميلادي
+",
+                descEn: "A glass bottle containing a candle holder for lighting   
+PNG
+
+Egypt in the Umayyad Period 41 AH / 661 AD   
+PNG
+
+1st / 2nd Century AH ___ 5th / 6th Century AD   
+PNG"
+            } {
+                id:16,
+                image: "",
+                video: "video1",
+                audio: "",
+                titleAr: "فيلم وثائقي قصي",
+                titleEn: "Short Documentary",
+                descAr: "فيلم وثائقي قصير يشرح تفاصيل القطعة وتاريخها
+",
+                descEn: "A short documentary explaining the artifact's details and history"
+            },  {
+                id:17,
+                image: "",
+                video: "video2",
+                audio: "",
+                titleAr: "فيلم وثائقي قصي",
+                titleEn: "Short Documentary",
+                descAr: "فيلم وثائقي قصير يشرح تفاصيل القطعة وتاريخها
+",
+                descEn: "A short documentary explaining the artifact's details and history"
+            },    {
+                id:18
+                image: "",
+                video: "",
+                audio: "aoudio1",
+                titleAr: "استمع إلى الرواية الصوتية لهذه القطعة الأثرية.
+",
+                titleEn: "Listen to the audio narrative of this artifact",
+                descAr: "استمع إلى الرواية الصوتية لهذه القطعة الأثرية.
+ا
+",
+                descEn: "Listen to the audio narrative of this artifact"
+            },   {
+                id:19
+                image: "",
+                video: "",
+                audio: "aoudio2",
+                titleAr: "استمع إلى الرواية الصوتية لهذه القطعة الأثرية.
+",
+                titleEn: "Listen to the audio narrative of this artifact",
+                descAr: "استمع إلى الرواية الصوتية لهذه القطعة الأثرية.
+ا
+",
+                descEn: "Listen to the audio narrative of this artifact"
+            },    {
+                id:10
+                image: "",
+                video: "",
+                audio: "aoudio3",
+                titleAr: "استمع إلى الرواية الصوتية لهذه القطعة الأثرية.
+",
+                titleEn: "Listen to the audio narrative of this artifact",
+                descAr: "استمع إلى الرواية الصوتية لهذه القطعة الأثرية.
+ا
+",
+                descEn: "Listen to the audio narrative of this artifact"
+            },  
+        let currentLang = 'ar';
+
+        function renderGallery() {
+            const container = document.getElementById('gallery-container');
+            container.innerHTML = '';
+            
+            artifactsData.forEach(artifact => {
+                const title = currentLang === 'ar' ? artifact.titleAr : artifact.titleEn;
+                const desc = currentLang === 'ar' ? artifact.descAr : artifact.descEn;
+                
+                // لو مفيش صورة، نستخدم صورة بديلة (Placeholder)
+                const imgSrc = artifact.image ? artifact.image : 'https://via.placeholder.com/280x250/CCCCCC/FFFFFF?text=No+Image';
+
+                const card = document.createElement('div');
+                card.className = 'artifact-card';
+                card.onclick = () => openModal(artifact);
+                card.innerHTML = `
+                    <img src="${imgSrc}" alt="${title}" loading="lazy">
+                    <div class="artifact-info">
+                        <h3>${title || ' '}</h3>
+                        <p>${desc || ' '}</p>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function openModal(artifact) {
+            const overlay = document.getElementById('modal-overlay');
+            const modalImg = document.getElementById('modal-img');
+            
+            // 1. التعامل مع الصورة
+            if (artifact.image && artifact.image !== "") {
+                modalImg.src = artifact.image;
+                modalImg.style.display = 'block';
+            } else {
+                modalImg.style.display = 'none';
+                modalImg.src = '';
+            }
+
+            const modalTitle = document.getElementById('modal-title');
+            const modalDesc = document.getElementById('modal-desc');
+            
+            // 2. التعامل مع العنوان
+            if (artifact.titleAr || artifact.titleEn) {
+                modalTitle.textContent = currentLang === 'ar' ? artifact.titleAr : artifact.titleEn;
+                modalTitle.style.display = 'block';
+            } else {
+                modalTitle.style.display = 'none';
+            }
+            
+            // 3. التعامل مع الوصف
+            if (artifact.descAr || artifact.descEn) {
+                modalDesc.textContent = currentLang === 'ar' ? artifact.descAr : artifact.descEn;
+                modalDesc.style.display = 'block';
+            } else {
+                modalDesc.style.display = 'none';
+            }
+
+            const videoSection = document.getElementById('video-section');
+            const audioSection = document.getElementById('audio-section');
+            const modalVideo = document.getElementById('modal-video');
+            const modalAudio = document.getElementById('modal-audio');
+
+            // 4. التعامل مع الفيديو
+            if (artifact.video && artifact.video !== "") {
+                modalVideo.src = artifact.video;
+                videoSection.style.display = 'block';
+            } else {
+                videoSection.style.display = 'none';
+                modalVideo.src = '';
+            }
+
+            // 5. التعامل مع الصوت
+            if (artifact.audio && artifact.audio !== "") {
+                modalAudio.src = artifact.audio;
+                audioSection.style.display = 'block';
+            } else {
+                audioSection.style.display = 'none';
+                modalAudio.src = '';
+            }
+
+            overlay.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(event) {
+            const overlay = document.getElementById('modal-overlay');
+            if (!event || event.target === overlay || event.target.classList.contains('close-btn')) {
+                overlay.style.display = 'none';
+                document.body.style.overflow = 'auto';
+                
+                // إيقاف تشغيل الفيديو والصوت عند الإغلاق
+                document.getElementById('modal-video').pause();
+                document.getElementById('modal-audio').pause();
+            }
+        }
+
+        function toggleLanguage() {
+            currentLang = currentLang === 'ar' ? 'en' : 'ar';
+            document.documentElement.lang = currentLang;
+            document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
+            document.getElementById('main-title').textContent = currentLang === 'ar' ? "المتحف الرقمي" : "Digital Museum";
+            document.getElementById('lang-btn').textContent = currentLang === 'ar' ? "English" : "العربية";
+            renderGallery();
+        }
+
+        function toggleDarkMode() { document.body.classList.toggle('dark-mode'); }
+
+        window.onload = () => { renderGallery(); };
+    </script>
+</body>
+</html>
